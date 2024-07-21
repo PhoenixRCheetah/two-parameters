@@ -1,0 +1,69 @@
+---
+title: "Two Parameters"
+author: "Roshan Ranganathan"
+format: html
+execute: 
+  echo: false
+---
+
+```{r}
+#| message: FALSE
+library(tidyverse)
+library(primer.data)
+library(brms)
+library(tidybayes)
+library(gtsummary)
+```
+
+```{r}
+nhanes |> 
+  filter(sex == "Male", age >= 18) |> 
+  select(height) |> 
+  drop_na() |>
+  ggplot(aes(x = height))+
+  geom_histogram(bins = 50) +
+  labs(title = "Male Adult Height in the US in 2010",
+  x = "Height (cm)",
+  y = "Count",
+  caption = "Source: National Health and Nutritional Examination Survey")
+
+ch5 <- nhanes |>
+  filter(sex == "Male", age >= 18) |>
+  select(height) |>
+  drop_na()
+```
+
+We refined the NHANES dataset to focus on adult males, visualized their height distribution, and estimated the likelihood of encountering a man taller than 180 cm to analyze height trends. Addressing Justice in data science, we ensured our models considered the Population Table, stability, representativeness, and unconfoundedness. We recognized that non-representativeness due to voluntary participation could affect results. Applying Courage, we developed and tested a linear model to estimate average height, validating our approach to ensure accurate insights.
+
+```{r}
+#| cache: TRUE
+fit_male_height <- brm(formula = height ~ 1, data = ch5, family = gaussian(), silent = 2, refresh = 0, seed = 12)
+```
+
+```{r}
+tbl_regression(fit_male_height, intercept = TRUE)
+```
+
+```{r}
+#| label: plot
+ndata <- tibble(.rows = 1)
+fit_male_height |>
+  add_predicted_draws(newdata = ndata) |> 
+  ggplot(aes(x = .prediction)) +
+    geom_histogram(aes(y = after_stat(count/sum(count))), bins = 100) +
+    labs(title = "Posterior for Height of Random Male",
+    subtitle = "Uncertainty for a single individual is much greater than for the expected value",
+    x = "Height (cm)",
+    y = "Probability",
+    caption = "Data source: NHANES") + 
+    scale_x_continuous(labels = scales::number_format()) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1))
+```
+
+```{r}
+fit_male_height |> 
+  add_predicted_draws(newdata = ndata) |>
+  mutate(tall = if_else(.prediction > 180, TRUE, FALSE)) |>
+  summarize(odds = mean(tall))
+```
+
